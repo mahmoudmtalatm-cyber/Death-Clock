@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Death Clock</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: a desk clock seen from slightly above, centred on a dark desk.
+   Top face carries the red and grey buttons; the front carries the engraved
+   motto, the seven-segment window, a brightness knob (left) and the
+   alarm controls (right). MOX NOX is engraved bottom left. */
+:root{
+  --desk:#140e0a;
+  --desk-glow:#2b1c12;
+  --wood-a:#94623a;
+  --wood-b:#6a4023;
+  --wood-edge:#2e1a0d;
+  --led:#ff2b18;
+  --led-dim:#3b0b08;
+  --ink:#eadfd2;
+  --muted:#9d8d7c;
+  --red:#d6231b;
+  --grey:#8f9195;
+  --engrave:rgba(36,17,6,.78);
+  --bri:1;
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  min-height:100dvh;
+  background:
+    radial-gradient(120% 70% at 50% 28%,var(--desk-glow),var(--desk) 62%) ,
+    var(--desk);
+  color:var(--ink);
+  font-family:var(--mono);
+  padding-block:max(24px,env(safe-area-inset-top,0px)) max(24px,env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;
+}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid #ffd2a0;outline-offset:3px}
+
+/* ---------- the clock ---------- */
+.clock{font-size:min(1.05vw,10px);width:86em;max-width:100%;position:relative;padding-bottom:2.2em}
+.top{
+  height:7.6em;margin:0 4em;
+  clip-path:polygon(3.5% 0,96.5% 0,100% 100%,0 100%);
+  background:
+    linear-gradient(180deg,rgba(255,235,205,.16),rgba(0,0,0,.12)),
+    var(--grain),linear-gradient(180deg,#a56d41,#96633b);
+  background-size:100% 100%;
+  background-blend-mode:normal,multiply,normal;
+  display:flex;align-items:center;justify-content:center;gap:5em;
+  padding-top:.8em;
+}
+.face{
+  position:relative;border-radius:1.4em;padding:3.6em 5em 3.4em;
+  background:var(--grain),linear-gradient(180deg,var(--wood-a),var(--wood-b));
+  background-size:100% 100%;
+  background-blend-mode:multiply,normal;
+  box-shadow:
+    inset 0 .25em 0 rgba(255,225,190,.28),
+    inset 0 -.5em 1em rgba(0,0,0,.35),
+    0 1.2em 2em rgba(0,0,0,.55),
+    0 0 0 .25em var(--wood-edge);
+}
+.feet{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-between;padding:0 7em}
+.feet i{display:block;width:10em;height:2.6em;background:#0c0705;border-radius:0 0 1em 1em;box-shadow:0 .4em .8em rgba(0,0,0,.6)}
+
+.engr{
+  font-family:var(--display);font-weight:600;text-transform:uppercase;letter-spacing:.32em;
+  font-size:max(2.5em,9px);color:var(--engrave);text-align:center;
+  text-shadow:0 .08em 0 rgba(255,220,180,.28),0 -.06em 0 rgba(0,0,0,.25);
+}
+.motto{margin-bottom:1.8em}
+
+.window{
+  background:#060303;border-radius:.9em;padding:2.2em;
+  box-shadow:inset 0 .4em 1.2em #000,0 0 0 .4em #24150c,0 .18em 0 .4em rgba(255,235,205,.14);
+}
+.lcd-wrap{
+  position:relative;overflow:hidden;border-radius:.5em;padding:3.6em 2em 2.6em;
+  background:linear-gradient(180deg,#260806,#150403);
+  box-shadow:inset 0 0 2.5em rgba(0,0,0,.9);
+}
+.lcd-wrap::after{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(115deg,rgba(255,255,255,.06) 0 34%,transparent 34%);
+}
+.ind{
+  position:absolute;top:1em;font-family:var(--display);font-weight:600;
+  font-size:max(1.8em,8px);letter-spacing:.2em;color:var(--led-dim);
+}
+.ind.on{color:var(--led);opacity:var(--bri);text-shadow:0 0 .6em rgba(255,43,24,.8)}
+#indAlm{left:1.6em}#indPm{right:1.6em}
+.lcd{
+  display:flex;align-items:center;justify-content:center;transform:skewX(-4deg);
+  min-height:11em;
+}
+.lcd.blink{animation:blink 1s steps(1) infinite}
+body.ringing .lcd{animation:blink .5s steps(1) infinite}
+@keyframes blink{50%{opacity:.12}}
+.dg{width:5.4em;height:9.6em;margin:0 .45em;overflow:visible}
+.cl{width:2.2em;height:9.6em;margin:0 .35em;overflow:visible}
+.gap{width:1.2em;flex:none}
+.seg{fill:#2b0907;transition:none}
+.seg.on{fill:var(--led);opacity:var(--bri);filter:drop-shadow(0 0 calc(.7em*var(--bri)) rgba(255,43,24,.85))}
+
+/* controls row */
+.controls{display:flex;justify-content:space-between;align-items:flex-end;gap:2em;margin-top:3.4em}
+.cluster{display:flex;align-items:flex-end;gap:3em}
+.label{
+  font-family:var(--display);font-weight:600;text-transform:uppercase;letter-spacing:.24em;
+  font-size:max(1.9em,8px);color:var(--engrave);text-align:center;margin-top:1em;
+  text-shadow:0 .08em 0 rgba(255,220,180,.25);
+}
+.unit{display:flex;flex-direction:column;align-items:center}
+.knob{
+  --rot:0deg;width:9.4em;height:9.4em;border-radius:50%;position:relative;cursor:grab;touch-action:none;
+  background:
+    repeating-conic-gradient(from 0deg,rgba(0,0,0,.35) 0 2deg,transparent 2deg 12deg),
+    radial-gradient(circle at 35% 30%,#d9dadc,#7d7f84 55%,#4a4b4f);
+  box-shadow:0 .7em 1.1em rgba(0,0,0,.55),inset 0 .15em .2em rgba(255,255,255,.5),0 0 0 .45em #1a110a;
+  transform:rotate(var(--rot));transition:transform .12s ease-out;
+}
+.knob:active{cursor:grabbing}
+.knob::before{
+  content:"";position:absolute;left:50%;top:.7em;width:.9em;height:3em;margin-left:-.45em;
+  background:#1a1210;border-radius:.3em;
+}
+.knob::after{
+  content:"";position:absolute;inset:2.4em;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#f0f0f1,#a3a5a9 60%,#6b6d72);
+  box-shadow:inset 0 -.2em .4em rgba(0,0,0,.35);
+}
+
+/* buttons */
+.btn{
+  position:relative;border:0;padding:0;cursor:pointer;display:block;touch-action:manipulation;
+  transition:transform .06s,box-shadow .06s;
+}
+.btn.red{
+  width:19em;height:5.6em;border-radius:1.1em;
+  background:linear-gradient(180deg,#ff5a4d,var(--red) 45%,#9c120d);
+  box-shadow:0 .7em 0 #5e0a07,0 1.1em 1.2em rgba(0,0,0,.55),inset 0 .2em .2em rgba(255,255,255,.4);
+}
+.btn.grey{
+  width:11em;height:5.6em;border-radius:1.1em;
+  background:linear-gradient(180deg,#c5c7ca,var(--grey) 45%,#5d5f63);
+  box-shadow:0 .7em 0 #35363a,0 1.1em 1.2em rgba(0,0,0,.5),inset 0 .2em .2em rgba(255,255,255,.55);
+}
+.btn.small{
+  width:7.2em;height:3.8em;border-radius:.8em;
+  background:linear-gradient(180deg,#4a4642,#2a2724);
+  box-shadow:0 .5em 0 #0e0c0b,0 .8em .9em rgba(0,0,0,.5),inset 0 .15em .15em rgba(255,255,255,.18);
+}
+.btn:active,.btn.press{transform:translateY(.55em)}
+.btn.red:active,.btn.red.press{box-shadow:0 .15em 0 #5e0a07,0 .3em .6em rgba(0,0,0,.5),inset 0 .2em .2em rgba(255,255,255,.3)}
+.btn.grey:active,.btn.grey.press{box-shadow:0 .15em 0 #35363a,0 .3em .6em rgba(0,0,0,.5),inset 0 .2em .2em rgba(255,255,255,.4)}
+.btn.small:active,.btn.small.press{box-shadow:0 .1em 0 #0e0c0b,0 .2em .5em rgba(0,0,0,.5)}
+.btn.red.ready{animation:glow 1.6s ease-in-out infinite}
+@keyframes glow{
+  50%{box-shadow:0 .7em 0 #5e0a07,0 0 2.6em 1em rgba(255,60,40,.6),inset 0 .2em .2em rgba(255,255,255,.4)}
+}
+.btn-wrap{display:flex;flex-direction:column;align-items:center}
+.btn-wrap .label{margin-top:1.4em}
+.top .label{margin-top:1.6em;color:rgba(40,18,6,.8)}
+.alm-pair{display:flex;gap:2em}
+
+.mox{margin-top:2.6em;text-align:left;letter-spacing:.5em;font-size:max(3em,11px)}
+
+/* ---------- caption under the clock ---------- */
+.caption{text-align:center;max-width:46rem;display:flex;flex-direction:column;gap:.9rem;align-items:center}
+#status{margin:0;min-height:1.4em;font-size:.95rem;letter-spacing:.04em;color:var(--ink)}
+.quote{margin:0;font-size:.82rem;line-height:1.6;color:var(--muted)}
+.quote b{font-family:var(--display);font-weight:600;font-size:1.15rem;letter-spacing:.12em;color:#c9b8a4;text-transform:uppercase;display:block}
+.fine{margin:0;font-size:.72rem;line-height:1.6;color:#7a6c5e}
+
+/* ---------- survey ---------- */
+.scrim{
+  position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
+  background:rgba(8,5,3,.84);backdrop-filter:blur(3px);
+  padding-block:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+.scrim[hidden]{display:none}
+.card{
+  width:min(520px,100%);max-height:100%;overflow:auto;background:#16100c;border:1px solid #3d2b1e;border-radius:6px;
+  padding:1.8rem 1.6rem 1.5rem;box-shadow:0 1.5rem 4rem rgba(0,0,0,.7);
+}
+.prog{display:flex;gap:4px;margin-bottom:1.4rem}
+.prog i{flex:1;height:5px;background:#2a1b13;border-radius:1px}
+.prog i.done{background:var(--led);box-shadow:0 0 6px rgba(255,43,24,.6)}
+.step{font-family:var(--display);font-weight:600;font-size:.95rem;letter-spacing:.24em;text-transform:uppercase;color:var(--muted);margin:0 0 .6rem}
+.q{font-family:var(--display);font-weight:600;font-size:clamp(1.7rem,6vw,2.2rem);line-height:1.1;margin:0 0 .5rem;text-wrap:balance}
+.hint{margin:0 0 1.3rem;font-size:.8rem;line-height:1.6;color:var(--muted)}
+.opts{display:grid;gap:.55rem}
+.opt{
+  text-align:left;background:#201610;border:1px solid #3d2b1e;border-radius:4px;padding:.85rem 1rem;cursor:pointer;
+  font-size:.92rem;transition:border-color .12s,background .12s;
+}
+.opt:hover{border-color:#7a5238}
+.opt[aria-pressed="true"]{border-color:var(--led);background:#2c1410}
+.opt small{display:block;color:var(--muted);font-size:.74rem;margin-top:.2rem}
+.field{display:flex;align-items:center;gap:.7rem}
+.field input{
+  width:100%;background:#0d0907;border:1px solid #4a3425;border-radius:4px;padding:.85rem 1rem;
+  font:500 1.15rem var(--mono);color:var(--ink);color-scheme:dark;
+}
+.field span{font-size:.95rem;color:var(--muted)}
+.err{min-height:1.2rem;margin:.6rem 0 0;font-size:.78rem;color:#ff8a7c}
+.nav{display:flex;justify-content:space-between;gap:1rem;margin-top:1rem}
+.nbtn{
+  background:transparent;border:1px solid #4a3425;border-radius:4px;padding:.7rem 1.2rem;cursor:pointer;font-size:.88rem;
+  letter-spacing:.06em;
+}
+.nbtn:hover{border-color:#a07350}
+.nbtn.go{background:var(--red);border-color:var(--red);color:#fff;font-weight:500}
+.nbtn.go:hover{background:#ea3a31}
+.nbtn[disabled]{opacity:.3;cursor:default}
+.seal-num{font-family:var(--display);font-weight:700;font-size:clamp(2.2rem,9vw,3.2rem);color:var(--led);letter-spacing:.04em;margin:.2rem 0 .2rem;text-shadow:0 0 14px rgba(255,43,24,.5)}
+
+@media (prefers-reduced-motion:reduce){
+  .btn.red.ready{animation:none;box-shadow:0 .7em 0 #5e0a07,0 0 2em .6em rgba(255,60,40,.5)}
+  .lcd.blink,body.ringing .lcd{animation:none}
+  .knob{transition:none}
+}
+</style>
+<style>
+:root{
+  --grain:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='700' viewBox='0 0 1200 700' preserveAspectRatio='none'><filter id='n' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.0015 0.1' numOctaves='3' seed='7' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.16  0 0 0 0 0.07  0 0 0 0 0.02  0 0 0 1.1 -0.32'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+</style>
+</head>
+<body>
+
+<main class="clock" id="clock" aria-label="Death Clock">
+  <div class="top">
+    <div class="btn-wrap">
+      <button class="btn red" id="btnRed" aria-label="Red button: start the countdown"></button>
+    </div>
+    <div class="btn-wrap">
+      <button class="btn grey" id="btnGrey" aria-label="Grey button: switch between countdown and clock"></button>
+    </div>
+  </div>
+
+  <div class="face">
+    <div class="engr motto">Omnes vulnerant, ultima necat</div>
+
+    <div class="window">
+      <div class="lcd-wrap">
+        <span class="ind" id="indAlm">ALM</span>
+        <span class="ind" id="indPm">PM</span>
+        <div class="lcd" id="lcd" role="img" aria-label="Seven-segment display"></div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="cluster">
+        <div class="unit">
+          <div class="knob" id="knobBri" tabindex="0" role="slider" aria-label="Display brightness" aria-valuemin="1" aria-valuemax="5"></div>
+          <div class="label">Brightness</div>
+        </div>
+      </div>
+      <div class="cluster">
+        <div class="unit">
+          <div class="alm-pair">
+            <div class="btn-wrap"><button class="btn small" id="btnAlm" aria-label="Alarm on or off"></button><div class="label">Alarm</div></div>
+            <div class="btn-wrap"><button class="btn small" id="btnSet" aria-label="Set alarm time"></button><div class="label">Set</div></div>
+          </div>
+        </div>
+        <div class="unit">
+          <div class="knob" id="knobSet" tabindex="0" role="slider" aria-label="Adjust alarm time"></div>
+          <div class="label">Adjust</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="engr mox">Mox Nox</div>
+  </div>
+  <div class="feet"><i></i><i></i></div>
+</main>
+
+<section class="caption">
+  <p id="status" aria-live="polite"></p>
+  <p class="quote"><b>Omnes vulnerant, ultima necat.</b></p>
+</section>
+
+<div class="scrim" id="survey" role="dialog" aria-modal="true" aria-labelledby="qTitle" hidden>
+  <div class="card" id="card"></div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = s => document.querySelector(s);
+  const YEAR = 31556952;               // seconds in a mean Gregorian year (40 years = 1,262,278,080)
+  const KEY = 'deathclock.v1';
+
+  /* ---------- state (kept in the browser; there is deliberately no reset) ---------- */
+  const defaults = () => ({ sealed:false, seconds:0, end:null, answers:{}, step:0, bri:3, alarm:{h:7,m:0,on:false} });
+  let storageOK = true;
+  function load(){
+    try{
+      const raw = localStorage.getItem(KEY);
+      if(raw){ const o = JSON.parse(raw); return Object.assign(defaults(), o, { alarm:Object.assign(defaults().alarm, o.alarm||{}) }); }
+    }catch(e){}
+    return defaults();
+  }
+  function save(){
+    try{ localStorage.setItem(KEY, JSON.stringify(S)); }
+    catch(e){ storageOK = false; }
+  }
+  let S = load();
+  try{ localStorage.setItem(KEY+'.t','1'); localStorage.removeItem(KEY+'.t'); }catch(e){ storageOK = false; }
+
+  /* ---------- seven-segment display ---------- */
+  const SEGS = {
+    a:'12,4 16,0 44,0 48,4 44,8 16,8',
+    b:'50,6 54,10 54,44 50,48 46,44 46,10',
+    c:'50,52 54,56 54,90 50,94 46,90 46,56',
+    d:'12,96 16,92 44,92 48,96 44,100 16,100',
+    e:'10,52 14,56 14,90 10,94 6,90 6,56',
+    f:'10,6 14,10 14,44 10,48 6,44 6,10',
+    g:'12,50 16,46 44,46 48,50 44,54 16,54'
+  };
+  const MAP = {'0':'abcdef','1':'bc','2':'abdeg','3':'abcdg','4':'bcfg','5':'acdfg','6':'acdefg','7':'abc','8':'abcdefg','9':'abcdfg','-':'g',' ':''};
+  const NS = 'http://www.w3.org/2000/svg';
+  const lcd = $('#lcd');
+  let kind = '', digits = [], colons = [];
+
+  function build(k){
+    if(k === kind) return;
+    kind = k; lcd.innerHTML = ''; digits = []; colons = [];
+    const layout = k === 'count'
+      ? ['d','g','d','d','d','g','d','d','d','g','d','d','d']
+      : ['d','d','c','d','d','c','d','d'];
+    layout.forEach(t => {
+      if(t === 'g'){ const g = document.createElement('div'); g.className = 'gap'; lcd.appendChild(g); return; }
+      const svg = document.createElementNS(NS,'svg');
+      if(t === 'd'){
+        svg.setAttribute('viewBox','0 0 60 100'); svg.setAttribute('class','dg');
+        const map = {};
+        Object.keys(SEGS).forEach(n => {
+          const p = document.createElementNS(NS,'polygon');
+          p.setAttribute('points', SEGS[n]); p.setAttribute('class','seg'); svg.appendChild(p); map[n] = p;
+        });
+        digits.push({ map, cur:null });
+      } else {
+        svg.setAttribute('viewBox','0 0 20 100'); svg.setAttribute('class','cl');
+        const dots = [30,70].map(cy => {
+          const c = document.createElementNS(NS,'circle');
+          c.setAttribute('cx','10'); c.setAttribute('cy',cy); c.setAttribute('r','6'); c.setAttribute('class','seg'); svg.appendChild(c); return c;
+        });
+        colons.push(dots);
+      }
+      lcd.appendChild(svg);
+    });
+  }
+  function paint(chars, colonOn){
+    digits.forEach((d,i) => {
+      const ch = chars[i] === undefined ? ' ' : chars[i];
+      if(d.cur === ch) return;
+      d.cur = ch;
+      const on = MAP[ch] || '';
+      Object.keys(d.map).forEach(n => d.map[n].classList.toggle('on', on.indexOf(n) !== -1));
+    });
+    colons.forEach(dots => dots.forEach(c => c.classList.toggle('on', !!colonOn)));
+  }
+
+  /* ---------- view / mode ---------- */
+  let view = 'count';          // 'count' | 'clock'
+  let setMode = null;          // null | 'h' | 'm' (alarm setting)
+  let setTimer = null;
+  let flash = '', flashUntil = 0;
+
+  const fmt = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const two = n => String(n).padStart(2,'0');
+
+  function note(msg, ms = 2600){ flash = msg; flashUntil = Date.now() + ms; renderStatus(); }
+  function baseStatus(){
+    if(setMode) return setMode === 'h' ? 'Alarm: turn the knob to set the hour.' : 'Alarm: turn the knob to set the minutes.';
+    if(!S.sealed) return 'Answer the survey to set your seconds.';
+    if(!S.end) return 'Your seconds are set. Press the red button to begin.';
+    return view === 'count' ? 'Seconds remaining.' : 'Local time.';
+  }
+  function renderStatus(){
+    $('#status').textContent = (flash && Date.now() < flashUntil) ? flash : baseStatus();
+  }
+
+  function tick(){
+    const now = Date.now();
+    const d = new Date(now);
+    const showView = setMode ? 'clock' : view;
+    const lcdEl = lcd;
+    let blinkAll = false;
+
+    if(showView === 'count'){
+      build('count');
+      let n = null;
+      if(!S.sealed){ paint(Array(10).fill('-'), false); }
+      else{
+        n = S.end ? Math.max(0, Math.ceil((S.end - now) / 1000)) : S.seconds;
+        const str = String(n).padStart(10,' ');
+        paint(str.split(''), false);
+        if(S.end && n === 0) blinkAll = true;
+      }
+      $('#indPm').classList.remove('on');
+    } else {
+      build('clock');
+      let h, m, s, blankSecs = false;
+      if(setMode){ h = S.alarm.h; m = S.alarm.m; s = 0; blankSecs = true; }
+      else { h = d.getHours(); m = d.getMinutes(); s = d.getSeconds(); }
+      const h12 = h % 12 || 12;
+      let ch = [h12 < 10 ? ' ' : String(Math.floor(h12/10)), String(h12 % 10), String(Math.floor(m/10)), String(m % 10),
+                blankSecs ? ' ' : String(Math.floor(s/10)), blankSecs ? ' ' : String(s % 10)];
+      if(setMode && Math.floor(now/400) % 2 === 0){
+        if(setMode === 'h'){ ch[0] = ' '; ch[1] = ' '; } else { ch[2] = ' '; ch[3] = ' '; }
+      }
+      paint(ch, setMode ? true : s % 2 === 0);
+      $('#indPm').classList.toggle('on', h >= 12);
+    }
+    lcdEl.classList.toggle('blink', blinkAll);
+    $('#indAlm').classList.toggle('on', S.alarm.on);
+
+    // alarm
+    if(S.alarm.on && !ringing && d.getHours() === S.alarm.h && d.getMinutes() === S.alarm.m){
+      const key = d.toDateString() + S.alarm.h + ':' + S.alarm.m;
+      if(key !== lastRingKey){ lastRingKey = key; startRing(); }
+    }
+    // red button hint
+    $('#btnRed').classList.toggle('ready', S.sealed && !S.end);
+    renderStatus();
+  }
+
+  /* ---------- alarm sound ---------- */
+  let ctx = null, ringing = false, ringTimer = null, ringStop = null, lastRingKey = '';
+  document.addEventListener('pointerdown', () => {
+    try{
+      if(!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if(ctx.state === 'suspended') ctx.resume();
+    }catch(e){}
+  }, { once:false });
+  function beep(){
+    if(!ctx) return;
+    try{
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'square'; o.frequency.value = 1760;
+      g.gain.setValueAtTime(0.0001, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.18);
+      o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 0.2);
+    }catch(e){}
+  }
+  function startRing(){
+    ringing = true; document.body.classList.add('ringing'); beep();
+    ringTimer = setInterval(() => { beep(); setTimeout(beep, 220); }, 700);
+    ringStop = setTimeout(stopRing, 60000);
+    note('Alarm. Press any button to silence it.', 60000);
+  }
+  function stopRing(){
+    if(!ringing) return;
+    ringing = false; document.body.classList.remove('ringing');
+    clearInterval(ringTimer); clearTimeout(ringStop); flash = ''; renderStatus();
+  }
+
+  /* ---------- buttons ---------- */
+  function pressFx(el){ el.classList.add('press'); setTimeout(() => el.classList.remove('press'), 140); }
+  function touchSet(){ clearTimeout(setTimer); if(setMode) setTimer = setTimeout(() => { setMode = null; }, 10000); }
+
+  $('#btnRed').addEventListener('click', () => {
+    if(ringing){ stopRing(); return; }
+    if(!S.sealed){ note('Answer the survey first.'); openSurvey(); return; }
+    if(S.end){ note('The countdown is already running. It cannot be reset.'); return; }
+    S.end = Date.now() + S.seconds * 1000;
+    save(); view = 'count'; setMode = null;
+    note('The countdown has begun.');
+    tick();
+  });
+  $('#btnGrey').addEventListener('click', () => {
+    if(ringing){ stopRing(); return; }
+    setMode = null;
+    view = view === 'count' ? 'clock' : 'count';
+    tick();
+  });
+  $('#btnAlm').addEventListener('click', () => {
+    if(ringing){ stopRing(); return; }
+    S.alarm.on = !S.alarm.on; save();
+    note(S.alarm.on ? 'Alarm on for ' + alarmText() + '.' : 'Alarm off.');
+    tick();
+  });
+  $('#btnSet').addEventListener('click', () => {
+    if(ringing){ stopRing(); return; }
+    setMode = setMode === null ? 'h' : setMode === 'h' ? 'm' : null;
+    touchSet(); tick();
+  });
+  function alarmText(){
+    const h = S.alarm.h, h12 = h % 12 || 12;
+    return h12 + ':' + two(S.alarm.m) + (h >= 12 ? ' PM' : ' AM');
+  }
+
+  /* ---------- knobs ---------- */
+  function knob(el, step, onStep){
+    let drag = false, last = 0, acc = 0;
+    const ang = e => { const r = el.getBoundingClientRect(); return Math.atan2(e.clientY - (r.top + r.height/2), e.clientX - (r.left + r.width/2)) * 180 / Math.PI; };
+    el.addEventListener('pointerdown', e => { drag = true; last = ang(e); acc = 0; el.setPointerCapture(e.pointerId); e.preventDefault(); });
+    el.addEventListener('pointermove', e => {
+      if(!drag) return;
+      const a = ang(e); let d = a - last;
+      if(d > 180) d -= 360; if(d < -180) d += 360;
+      last = a; acc += d;
+      while(acc >= step){ acc -= step; onStep(1); }
+      while(acc <= -step){ acc += step; onStep(-1); }
+    });
+    const end = () => { drag = false; };
+    el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+    el.addEventListener('wheel', e => { e.preventDefault(); onStep(e.deltaY < 0 ? 1 : -1); }, { passive:false });
+    el.addEventListener('keydown', e => {
+      if(e.key === 'ArrowUp' || e.key === 'ArrowRight'){ onStep(1); e.preventDefault(); }
+      else if(e.key === 'ArrowDown' || e.key === 'ArrowLeft'){ onStep(-1); e.preventDefault(); }
+    });
+  }
+
+  const BRI = [0.28, 0.5, 0.72, 0.9, 1];
+  const knobBri = $('#knobBri');
+  function applyBri(){
+    document.documentElement.style.setProperty('--bri', BRI[S.bri]);
+    knobBri.style.setProperty('--rot', (-130 + S.bri * 65) + 'deg');
+    knobBri.setAttribute('aria-valuenow', S.bri + 1);
+  }
+  knob(knobBri, 22, dir => { S.bri = Math.max(0, Math.min(4, S.bri + dir)); save(); applyBri(); });
+
+  const knobSet = $('#knobSet');
+  let setRot = 0;
+  knob(knobSet, 18, dir => {
+    setRot += dir * 18; knobSet.style.setProperty('--rot', setRot + 'deg');
+    if(!setMode) return;
+    if(setMode === 'h') S.alarm.h = (S.alarm.h + dir + 24) % 24;
+    else S.alarm.m = (S.alarm.m + dir + 60) % 60;
+    save(); touchSet(); tick();
+  });
+
+  /* ---------- survey ---------- */
+  const OPT = (id, title, hint, opts) => ({ id, type:'opt', title, hint, opts });
+  const Q = [
+    { id:'dob', type:'date', title:'When were you born?', hint:'Your seconds are counted from your age today.' },
+    OPT('sex','What sex were you assigned at birth?','Used only for the statistical baseline.',
+      [['male','Male'],['female','Female'],['other','Prefer not to say']]),
+    { id:'height', type:'num', title:'How tall are you?', unit:'cm', min:100, max:230, ph:'170' },
+    { id:'weight', type:'num', title:'How much do you weigh?', unit:'kg', min:30, max:300, ph:'70' },
+    OPT('smoke','Do you smoke?','',[['never','Never'],['former','I used to'],['some','Occasionally'],['daily','Every day']]),
+    OPT('alcohol','How much do you drink?','',[['none','Not at all'],['light','A few drinks a week'],['mod','Most days'],['heavy','Heavily']]),
+    OPT('exercise','How often do you exercise?','',[['rare','Rarely'],['low','1 to 2 times a week'],['mid','3 to 4 times a week'],['high','5 or more times a week']]),
+    OPT('diet','How do you usually eat?','',[['proc','Mostly processed food'],['mix','A mix'],['whole','Mostly whole foods']]),
+    OPT('sleep','How many hours do you sleep?','',[['u6','Under 6'],['67','6 to 7'],['79','7 to 9'],['o9','Over 9']]),
+    OPT('stress','How stressed are you, usually?','',[['low','Rarely'],['mid','Sometimes'],['high','Often']]),
+    OPT('family','Did your parents or grandparents live past 80?','',[['yes','Most of them did'],['some','Some did'],['no','Few or none']]),
+    OPT('health','Do you have any long-term health conditions?','',[['none','None'],['one','One, and it is managed'],['many','More than one']]),
+    OPT('region','Where do you live?','Healthcare and living conditions shift life expectancy.',
+      [['hi','High-income country','For example the USA, UK, Germany, Japan'],['um','Upper-middle-income country','For example China, Brazil, Turkey'],
+       ['lm','Lower-middle-income country','For example Egypt, India, Nigeria'],['lo','Low-income country','For example Sudan, Yemen, Niger']])
+  ];
+
+  function estimate(a){
+    const age = (Date.now() - new Date(a.dob).getTime()) / (YEAR * 1000);
+    let life = { male:76, female:81, other:78.5 }[a.sex];
+    const bmi = a.weight / Math.pow(a.height / 100, 2);
+    life += bmi < 18.5 ? -1.5 : bmi < 25 ? 0 : bmi < 30 ? -1 : bmi < 35 ? -3 : -6;
+    life += { never:0, former:-1, some:-4, daily:-9 }[a.smoke];
+    life += { none:0, light:0.5, mod:-1, heavy:-5 }[a.alcohol];
+    life += { rare:-3, low:0, mid:2, high:3 }[a.exercise];
+    life += { proc:-2, mix:0, whole:1.5 }[a.diet];
+    life += { u6:-2, '67':-0.5, '79':0, o9:-1 }[a.sleep];
+    life += { low:0.5, mid:0, high:-2 }[a.stress];
+    life += { yes:2, some:0, no:-1.5 }[a.family];
+    life += { none:0, one:-3, many:-8 }[a.health];
+    life += { hi:0, um:-3, lm:-7, lo:-11 }[a.region];
+    let rem = life - age;
+    rem = 1 + Math.log(1 + Math.exp(rem - 1));   // soft floor so the very old still get a positive number
+    return Math.round(rem * YEAR);
+  }
+
+  const survey = $('#survey'), card = $('#card');
+  function openSurvey(){ if(!S.sealed){ survey.hidden = false; renderStep(); } }
+  function esc(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+  function renderStep(){
+    const total = Q.length + 1;
+    const i = Math.min(S.step, total - 1);
+    let html = '<div class="prog">' + Array.from({length:total}, (_,k) => '<i class="' + (k < i ? 'done' : '') + '"></i>').join('') + '</div>';
+    if(i === Q.length){
+      const secs = estimate(S.answers);
+      html += '<p class="step">Last step</p><h2 class="q" id="qTitle">Your seconds</h2>' +
+              '<div class="seal-num">' + fmt(secs) + '</div>' +
+              '<p class="hint">That is about ' + (secs / YEAR).toFixed(1) + ' years from today, as a statistical guess. When you lock this in, the number is set for good. There is no reset and no way to retake the survey.</p>' +
+              '<div class="nav"><button class="nbtn" id="back">Back</button><button class="nbtn go" id="seal">Lock it in</button></div>';
+      card.innerHTML = html;
+      $('#back').onclick = () => { S.step--; save(); renderStep(); };
+      $('#seal').onclick = () => {
+        S.seconds = estimate(S.answers); S.sealed = true; S.step = total; save();
+        survey.hidden = true; view = 'count'; tick();
+        note('Your seconds are set. Press the red button to begin.', 6000);
+      };
+      return;
+    }
+    const q = Q[i];
+    html += '<p class="step">Question ' + (i + 1) + ' of ' + Q.length + '</p><h2 class="q" id="qTitle">' + esc(q.title) + '</h2><p class="hint">' + esc(q.hint || '') + '</p>';
+    if(q.type === 'opt'){
+      html += '<div class="opts">' + q.opts.map(o =>
+        '<button class="opt" data-v="' + o[0] + '" aria-pressed="' + (S.answers[q.id] === o[0]) + '">' + esc(o[1]) + (o[2] ? '<small>' + esc(o[2]) + '</small>' : '') + '</button>').join('') + '</div>';
+    } else if(q.type === 'date'){
+      const today = new Date().toISOString().slice(0,10);
+      html += '<div class="field"><input id="inp" type="date" max="' + today + '" min="1900-01-01" value="' + esc(S.answers.dob || '') + '" aria-label="Date of birth"></div>';
+    } else {
+      html += '<div class="field"><input id="inp" type="number" inputmode="decimal" min="' + q.min + '" max="' + q.max + '" placeholder="' + q.ph + '" value="' + esc(S.answers[q.id] || '') + '" aria-label="' + esc(q.title) + '"><span>' + q.unit + '</span></div>';
+    }
+    html += '<p class="err" id="err" role="alert"></p><div class="nav"><button class="nbtn" id="back"' + (i === 0 ? ' disabled' : '') + '>Back</button>' +
+            (q.type === 'opt' ? '<span></span>' : '<button class="nbtn go" id="next">Next</button>') + '</div>';
+    card.innerHTML = html;
+
+    const go = () => { S.step++; save(); renderStep(); };
+    $('#back').onclick = () => { if(S.step > 0){ S.step--; save(); renderStep(); } };
+    if(q.type === 'opt'){
+      card.querySelectorAll('.opt').forEach(b => b.onclick = () => {
+        S.answers[q.id] = b.dataset.v; card.querySelectorAll('.opt').forEach(x => x.setAttribute('aria-pressed', x === b));
+        setTimeout(go, 170);
+      });
+    } else {
+      const inp = $('#inp'), err = $('#err');
+      const submit = () => {
+        const v = inp.value;
+        if(q.type === 'date'){
+          const t = new Date(v).getTime(), age = (Date.now() - t) / (YEAR * 1000);
+          if(!v || isNaN(t) || age < 0 || age > 115){ err.textContent = 'Enter a real date of birth.'; return; }
+        } else {
+          const n = parseFloat(v);
+          if(isNaN(n) || n < q.min || n > q.max){ err.textContent = 'Enter a number between ' + q.min + ' and ' + q.max + ' ' + q.unit + '.'; return; }
+        }
+        S.answers[q.id] = q.type === 'num' ? parseFloat(v) : v; go();
+      };
+      $('#next').onclick = submit;
+      inp.addEventListener('keydown', e => { if(e.key === 'Enter') submit(); });
+      setTimeout(() => inp.focus(), 30);
+    }
+  }
+
+  /* ---------- go ---------- */
+  applyBri();
+  if(!storageOK) note('This browser is blocking storage, so the clock cannot remember your seconds after you leave.', 12000);
+  if(S.sealed && S.step < Q.length) S.step = Q.length + 1;
+  if(!S.sealed) openSurvey();
+  tick();
+  setInterval(tick, 150);
+})();
+</script>
+</body>
+</html>
